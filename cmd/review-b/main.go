@@ -1,0 +1,79 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+
+	"github.com/BradleyZhang/ecommerce-review-b/common"
+
+	"github.com/BradleyZhang/ecommerce-review-b/internal/biz"
+	"github.com/BradleyZhang/ecommerce-review-b/internal/data"
+	"github.com/BradleyZhang/ecommerce-review-b/internal/server"
+	"github.com/BradleyZhang/ecommerce-review-b/internal/service"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	InitResources()
+
+	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", common.PortGRPC))
+	if err != nil {
+		common.FatalLog("failed to listen: ", err)
+	}
+	// DI
+	rc := data.NewReviewServiceClient(ctx)
+	d, cleanup, err := data.NewData(rc)
+	defer cleanup()
+	if err != nil {
+		common.FatalLog("new data err:", err)
+	}
+	repo := data.NewBusinessRepo(d)
+	uc := biz.NewBusinessUsecase(repo)
+	srv := service.NewBusinessService(uc)
+	grpcServer := server.NewGRPCServer(srv)
+	{ // gRPC
+		go func() {
+			err = grpcServer.Serve(lis)
+			if err != nil {
+				common.FatalLog("gRPC 错误: ", err)
+			}
+		}()
+		common.SysLog(common.Name+" gRPC started,listening on ", common.PortGRPC)
+	}
+
+	{ // HTTP
+		go func() {
+			mux, err := server.NewHTTPHandler(ctx)
+			if err != nil {
+				common.FatalLog("new http server error", err)
+			}
+			err = http.ListenAndServe(":"+strconv.Itoa(common.Port), mux)
+			if err != nil {
+				common.FatalLog("http server error: ", err)
+			}
+		}()
+		common.SysLog(common.Name+" http started ,listening on ", common.Port)
+	}
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	common.SysLog("received signal: ", sig, " shutting down...")
+}
+func InitResources() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		common.SysLog("No .env file found,useing default environment variables.If needed, please create a .env file and set the relevent variables.")
+		// common.FatalLog(err)
+	}
+	common.InitEnv()
+}
