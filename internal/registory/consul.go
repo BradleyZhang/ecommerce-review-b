@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/BradleyZhang/ecommerce-review-service/common"
+	"github.com/BradleyZhang/ecommerce-review-b/common"
 	"github.com/hashicorp/consul/api"
 )
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/BradleyZhang/ecommerce-review-b/internal/biz"
 	"github.com/BradleyZhang/ecommerce-review-b/internal/data"
+	"github.com/BradleyZhang/ecommerce-review-b/internal/registory"
 	"github.com/BradleyZhang/ecommerce-review-b/internal/server"
 	"github.com/BradleyZhang/ecommerce-review-b/internal/service"
 	"github.com/joho/godotenv"
@@ -26,7 +27,7 @@ func main() {
 
 	InitResources()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", common.PortGRPC))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", common.PortGRPC))
 	if err != nil {
 		common.FatalLog("failed to listen: ", err)
 	}
@@ -40,7 +41,16 @@ func main() {
 	repo := data.NewBusinessRepo(d)
 	uc := biz.NewBusinessUsecase(repo)
 	srv := service.NewBusinessService(uc)
-	grpcServer := server.NewGRPCServer(srv)
+	grpcServer, err := server.NewGRPCServer(srv)
+	if err != nil {
+		common.FatalLog("gPRC Server 初始化失败: ", err)
+	}
+
+	registery, err := registory.NewClient(registory.DefaultConfig())
+	if err != nil {
+		common.FatalLog("Registery 初始化失败:", err)
+	}
+
 	{ // gRPC
 		go func() {
 			err = grpcServer.Serve(lis)
@@ -49,6 +59,10 @@ func main() {
 			}
 		}()
 		common.SysLog(common.Name+" gRPC started,listening on ", common.PortGRPC)
+		err = registery.Register()
+		if err != nil {
+			common.FatalLog("服务注册失败:", err)
+		}
 	}
 
 	{ // HTTP
@@ -64,10 +78,18 @@ func main() {
 		}()
 		common.SysLog(common.Name+" http started ,listening on ", common.Port)
 	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	common.SysLog("received signal: ", sig, " shutting down...")
+
+	{ // shut down
+		if err := registery.Deregister(); err != nil {
+			common.ErrorLogf("deregister failed: %v", err)
+		}
+		grpcServer.GracefulStop()
+	}
 }
 func InitResources() {
 	err := godotenv.Load(".env")
