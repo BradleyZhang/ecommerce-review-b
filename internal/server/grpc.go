@@ -15,7 +15,7 @@ func NewGRPCServer(srv pb.BusinessServiceServer) *grpc.Server {
 	if err != nil {
 		common.FatalLog("validator 初始化失败", err)
 	}
-	interceptor := protovalidate_middleware.UnaryServerInterceptor(validator)
+	interceptor := protovalidate_middleware.UnaryServerInterceptor(validator) // 仅能校验非流式的
 	opts = append(opts, grpc.UnaryInterceptor(interceptor))
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterBusinessServiceServer(grpcServer, srv)

@@ -2,9 +2,11 @@ package data
 
 import (
 	"context"
+	"fmt"
 
 	reviewPb "github.com/BradleyZhang/ecommerce-review-b/api/gen/go/review/v1"
 	"github.com/BradleyZhang/ecommerce-review-b/common"
+	_ "github.com/mbobakov/grpc-consul-resolver" // gRPC resolver for services registered in consul
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -24,9 +26,14 @@ func NewData(rc reviewPb.ReviewServiceClient) (d *Data, cleanup func(), err erro
 func NewReviewServiceClient(ctx context.Context) reviewPb.ReviewServiceClient {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.NewClient("127.0.0.1:9090", opts...)
+	opts = append(opts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin": {}}]}`))
+
+	connString := fmt.Sprintf("consul://%s/%s?[healthy=true]&[wait=]&[near=]&[insecure=]&[limit=]&[tag=]&[token=]", common.ConsulAddress, common.ReviewServiceName)
+	conn, err := grpc.NewClient(
+		connString,
+		opts...)
 	if err != nil {
-		common.FatalLog("can't connect to review service gRPC server,err:", err)
+		common.FatalLog("failed to connect review service gRPC server,err:", err)
 	}
 	defer func() {
 		go func() {
@@ -34,6 +41,7 @@ func NewReviewServiceClient(ctx context.Context) reviewPb.ReviewServiceClient {
 			if cerr := conn.Close(); cerr != nil {
 				common.ErrorLogf("gRPC conn close err:%v", cerr)
 			}
+			common.SysLog("gRPC conn close")
 		}()
 	}()
 	client := reviewPb.NewReviewServiceClient(conn)

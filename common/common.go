@@ -5,7 +5,8 @@ import (
 )
 
 var (
-	Name = "review-b"
+	Name              = "review-b"
+	ReviewServiceName = "review-service" // 需要与 github.com/BradleyZhang/ecommerce-review-service 的 common.Name 一致
 )
 var (
 	PortGRPC = *flag.Int("port", 9091, "the gRPC listening port")
