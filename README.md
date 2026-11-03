@@ -2,4 +2,4 @@ Ecommerce Review Business Service
 
 电商评论 B 端微服务
 ---
-mbobakov/grpc-consul-resolver 
+[部署](https://github.com/BradleyZhang/ecommerce-review-deploy)
